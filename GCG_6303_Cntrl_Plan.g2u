@@ -1,0 +1,157 @@
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Main_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String,"")
+
+F.Intrinsic.Control.If(V.Caller.Hook,=,16090)
+	F.Intrinsic.Control.If(V.Passed.009001,=,"001811")
+		F.Intrinsic.Control.CallSub(Get_Data)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Main_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	F.Intrinsic.String.Build("Project: GCG_6303_Cntrl_Plan.g2u {0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Exit)
+Function.Intrinsic.Control.EndIf
+Program.Sub.Main.End
+
+Program.Sub.Get_Data.Start
+F.Intrinsic.Control.SetErrorHandler("Get_Data_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String,"")
+V.Local.sSql.Declare(String,"")
+V.Local.sInfo.Declare(String,"")
+V.Local.iCPID.Declare(Long,0)
+V.Local.sTemp.Declare(String,"")
+V.Local.i.Declare(Long,0)
+
+F.ODBC.Connection!ConG.OpenCompanyConnection
+
+F.Intrinsic.String.Build("Select Distinct Text_Info1, Text_Info2, A.PART_NO, Qty, Job, Suffix From V_BI_BAR_HEAD A LEFT JOIN V_INVENTORY_MST2 B on A.PART_NO = B.PART and A.PART_LOC = B.LOCATION Where TERMINAL = '{0}'",V.Passed.BIP_Terminal,V.Local.sSql)
+
+F.ODBC.Connection!ConG.ExecuteAndReturn(V.Local.sSql,V.Local.sTemp)
+
+F.Intrinsic.String.Split(V.Local.sTemp,"#$#",V.Local.sTemp)
+
+F.Intrinsic.Control.For(V.Local.i,0,V.Local.sTemp.UBound,1)
+	F.Intrinsic.String.Split(V.Local.sTemp(v.Local.i),"*!*",V.Local.sInfo)
+	
+	V.Local.sInfo.RedimPreserve(0,5)
+	
+	F.Intrinsic.Control.If(V.Local.sInfo(3).Trim,=,"")
+		V.Local.sInfo(3).Set("0")
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.String.RPad(V.Local.sInfo(2).Trim," ",20,V.Local.sInfo(2))
+	F.Intrinsic.String.Right(V.Local.sInfo(2),3,V.Local.sInfo(2))
+	
+	F.ODBC.Connection!ConG.Close
+	
+	F.ODBC.Connection!ConD.OpenConnection("Provider=SQLOLEDB;Server=S0812\SQLExpress;Database=Pk75;Uid=GSUser;Pwd=p4gs_User;")
+	
+	F.Intrinsic.String.Build("Select CP_ID From tblControl_Plan Where Cust_Id = '{0}' and Drawing_No = '{1}' and Rev_Lev = '{2}'",V.Local.sInfo(0).Trim,V.Local.sInfo(1).Trim,V.Local.sInfo(2).Trim,V.Local.sSql)
+	F.ODBC.Connection!ConD.ExecuteAndReturn(V.Local.sSql,V.Local.iCPID)
+	
+	F.Intrinsic.String.Build("Select Distinct '{2}' as Job, '{3}' as Suffix, B.Resp_ID, B.Comp_ID, B.Seq_No, B.Dim_Value, B.Tolerance, C.MTNAME, B.NOTES, D.DET_SAMP_SIZE From tblControl_Plan_Sample_Header A LEFT Join tblControl_Plan_Detail B on A.samp_id = B.samp_id Left Join tblControl_Plan_Measuring_Tool C on B.MT_ID = C.MTID LEFT JOIN tblControl_Plan_Sample_Detail D On D.Head_ID = A.Samp_ID Where B.CP_ID = '{0}' and {1} >= D.Det_Low and {1} <= D.Det_High",V.Local.iCPID,V.Local.sInfo(3),V.Local.sInfo(4).Trim,V.Local.sInfo(5).Trim,V.Local.sSql)
+	
+	F.Intrinsic.Control.If(V.DataTable.RptData.Exists)
+		F.Data.DataTable.CreateFromSQL("RptTemp","COND",V.Local.sSql,True)
+		F.Intrinsic.Control.If(V.DataTable.RptTemp.RowCount--,<>,-1)
+			F.Data.DataTable.Merge("RptTemp","RptData",False,2)
+		F.Intrinsic.Control.EndIf
+		F.Data.DataTable.Close("RptTemp")
+	F.Intrinsic.Control.Else
+		F.Data.DataTable.CreateFromSQL("RptData","COND",V.Local.sSql,True)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.Local.i)
+
+F.Data.DataTable.AddColumn("RptData","Terminal",String)
+F.Data.DataTable.SetValue("RptData",-1,"Terminal",V.Passed.BIP_Terminal)
+
+F.ODBC.Connection!ConD.Close
+
+F.Intrinsic.Control.CallSub(Print_Report)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Get_Data_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	F.Intrinsic.String.Build("Project: GCG_6303_Cntrl_Plan.g2u {0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Exit)
+Function.Intrinsic.Control.EndIf
+Program.Sub.Get_Data.End
+
+Program.Sub.Print_Report.Start
+F.Intrinsic.Control.SetErrorHandler("Print_Report_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String,"")
+V.Local.iRptID.Declare(Long,0)
+V.Local.iRunID.Declare(Long,0)
+V.Local.iLogID.Declare(Long,0)
+V.Local.iRet.Declare(Long,0)
+V.Local.sSql.Declare(String,"")
+V.Local.sParams.Declare(String,"")
+V.Local.sValues.Declare(String,"")
+V.Local.sStatus.Declare(String,"")
+
+F.Global.BI.GetIDFromName("GCG_6303_Control_Plan.rpt",V.Local.iRptID)
+
+F.Global.BI.GetRunID(V.Local.iRunID)
+F.Global.BI.StartLogging(V.Local.iRunID,V.Local.iRptID,-1,"GCG_6303_Control_Plan",V.Local.iLogID)
+
+F.ODBC.Connection!ConG.OpenCompanyConnection
+
+F.Intrinsic.String.Build("Delete From GCG_6303_Cntrl_Plan Where TERMINAL = '{0}'",V.Passed.BIP_Terminal,V.Local.sSql)
+F.ODBC.Connection!conG.execute(V.Local.sSql)
+
+F.Intrinsic.Control.If(V.DataTable.RptData.RowCount--,<>,-1)
+	F.Data.DataTable.SaveToDB("RptData","ConG","GCG_6303_Cntrl_Plan","",128,"TERMINAL@!@TERMINAL*!*RESP_ID@!@RESP_ID*!*COMP_ID@!@COMP_ID*!*SEQ_NO@!@SEQ_NO*!*DIM_VALUE@!@DIM_VALUE*!*TOLERANCE@!@TOLERANCE*!*MTNAME@!@MTNAME*!*NOTES@!@NOTES*!*DET_SAMP_SIZE@!@DET_SAMP_SIZE*!*Job@!@Job*!*Suffix@!@Suffix")
+F.Intrinsic.Control.Else
+	V.Local.sStatus.Set("No Control Data")
+F.Intrinsic.Control.EndIf
+
+F.ODBC.Connection!ConG.Close
+
+V.Local.sParams.Set("Terminal*!*ReportID*!*Matlbar*!*Outbar*!*FGbar*!*Program*!*Comments*!*Status")
+F.Intrinsic.String.Build("{0}*!*{1}*!*{2}*!*{3}*!*{4}*!*{5}*!*{6}*!*{7}",V.Passed.BIP_Terminal,V.Passed.BI_ReportID,V.Passed.BIP_Matlbar,V.Passed.BIP_Outbar,V.Passed.BIP_FGBar,V.Passed.BIP_Program,V.Passed.BIP_Comments,V.Local.sStatus,V.Local.sValues)
+
+F.Global.BI.StopLogging(V.Local.iLogID)
+
+F.Global.BI.RunReportPreProcessor(V.Local.iRunID,V.Local.iLogID,V.Local.sParams,V.Local.sValues,"",-1,True,"",-1,"",-1,"","",V.Local.iRet)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Print_Report_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	F.Intrinsic.String.Build("Project: GCG_6303_Cntrl_Plan.g2u {0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Exit)
+Function.Intrinsic.Control.EndIf
+Program.Sub.Print_Report.End
+
+Program.Sub.Exit.Start
+F.Intrinsic.Control.SetErrorHandler("Exit_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String,"")
+
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Exit_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	F.Intrinsic.Control.End
+Function.Intrinsic.Control.EndIf
+Program.Sub.Exit.End
